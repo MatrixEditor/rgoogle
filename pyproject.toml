@@ -1,0 +1,26 @@
+[project]
+name = "rgoogle"
+version = "0.0.1"
+description="Smali Visitor-API and Decryptor for Google's hidden JAR files"
+authors = [
+  { name="MatrixEditor", email="not@supported.com" },
+]
+readme = "README.md"
+classifiers = [
+    'Development Status :: 5 - Production/Stable',
+    'Intended Audience :: Science/Research',
+    'License :: OSI Approved :: MIT License',  
+    'Programming Language :: Python :: 3.6',
+    'Programming Language :: Python :: 3.7',
+    'Programming Language :: Python :: 3.8',
+    'Programming Language :: Python :: 3.9',
+    'Programming Language :: Python :: 3.10',
+  ]
+
+[project.urls]
+"Homepage" = "https://github.com/MatrixEditor/roogle"
+"API-Docs" = "https://rgoogle.readthedocs.io/rgoogle"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["rgoogle*"]
