@@ -11,6 +11,10 @@ import os
 project = 'rgoogle'
 copyright = '2023, MatrixEditor'
 author = 'MatrixEditor'
+
+# The short X.Y version.
+version = '0.0'
+# The full version, including alpha/beta/rc tags.
 release = '0.0.1'
 
 # If extensions (or modules to document with autodoc) are in another directory,
@@ -20,22 +24,45 @@ sys.path.insert(0, os.path.abspath('..'))
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
-extensions = ['sphinx.ext.autodoc']
+extensions = [
+	'sphinx.ext.autodoc', 
+	'sphinx.ext.doctest',
+	'sphinx.ext.todo',
+]
 
 templates_path = ['_templates']
 exclude_patterns = []
 
+# The master toctree document.
+master_doc = 'index'
+
+# The suffix of source filenames.
+source_suffix = '.rst'
+
+autodoc_mock_imports = ['bs4', 'requests']
+
+# Add any paths that contain templates here, relative to this directory.
+templates_path = ['_templates']
+
+# List of patterns, relative to source directory, that match files and
+# directories to ignore when looking for source files.
+exclude_patterns = ['_build', 'README.rst']
+
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
+# To build locally, run "pip install sphinx-rtd-theme" before
+import sphinx_rtd_theme
 
-html_theme = 'classic'
+html_theme = 'sphinx_rtd_theme'
+html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+
 html_static_path = ['_static']
 html_theme_options = {
-    "rightsidebar": "false",
-    "collapsiblesidebar": "false",
-    "bgcolor": "#FFFFFF",
-    "sidebarbgcolor": "#FFFFFF",
-    "sidebarbtncolor": "#D3D3D3",
-    "sidebartextcolor": "#000000",
-    "sidebarlinkcolor": "#808080"
+    'logo_only': False,
+    'display_version': True,
+    'prev_next_buttons_location': 'bottom',
+    'style_external_links': False,
+    # Toc options
+    'collapse_navigation': False,
+    'titles_only': False
 }

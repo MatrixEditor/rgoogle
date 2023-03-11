@@ -1,3 +1,4 @@
+# This file is part of rgoogle's Smali API
 # Copyright (C) 2023 MatrixEditor
 
 # This program is free software: you can redistribute it and/or modify
@@ -12,6 +13,11 @@
 
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+__doc__ = """
+This module contains an implementation of a line-based Smali source code
+parser. It can be used to parse Smali files as an output of a decompiling
+routine.
+"""
 
 import io
 
@@ -20,11 +26,7 @@ from rgoogle.smali.visitor import (
     ClassVisitor,
     FieldVisitor,
     AnnotationVisitor,
-    MethodVisitor,
-
-    EMPTY_FIELDV,
-    EMPTY_ANNOV,
-    EMPTY_METHV
+    MethodVisitor
 )
 from rgoogle.smali.base import (
     AccessType,
@@ -35,8 +37,37 @@ from rgoogle.smali.base import (
 )
 from rgoogle.smali.opcode import RETURN, GOTO
 
+class SupportsCopy:
+    """Interface for classes that can react as a copy handler for a SmaliReader.
+    
+    Note that the context is used to distinguish the current visitor.
+    """
+    
+    def copy(self, line: str, context: type = ClassVisitor) -> None:
+        """Copies the given line.
+
+        :param line: the line to copy
+        :type line: str
+        """
+
+EMPTY_ANNOV = AnnotationVisitor()
+EMPTY_METHV = MethodVisitor()
+EMPTY_FIELDV = FieldVisitor()
+
 class SmaliReader:
     """Basic implementation of a line-base Smali-SourceCode parser.
+
+    :param validate: Indicates the reader should validate the input code, defaults to True
+    :type validate: bool, optional
+    :param comments: With this option enabled, the parser will also notify about
+                        comments in the source file, defaults to False
+    :type comments: bool, optional
+    :param snippet: With this option enabled, the initial class definition will be
+                    skipped, defaults to False
+    :type snippet: bool, optional
+    :param errors: Indicates whether this reader should throw errors (values: ``strict``, ``ignore``),
+                    defaults to 'strict'
+    :type errors: str, optional
     """
 
     validate: bool = False
@@ -64,6 +95,19 @@ class SmaliReader:
 
     errors: str = 'strict'
     """Indicates whether this reader should throw errors (values: 'strict', 'ignore')"""
+
+    copy_handler: SupportsCopy
+
+    def __init__(self, validate: bool = True, comments: bool = False,
+                 snippet: bool = False, errors: str = 'strict') -> None:
+        self.validate = validate
+        self.comments = comments
+        self.snippet = snippet
+        self.errors = errors
+        self.copy_handler = None
+        # check valid values
+        if self.errors not in ('ignore', 'strict'):
+            raise ValueError(f'Invalid error handler: {errors}')
 
     def visit(self, source: io.IOBase, visitor: ClassVisitor) -> None:
         """Parses the given input which can be any readable source.
@@ -99,7 +143,7 @@ class SmaliReader:
 
         self.source = source
         self.stack.append(visitor)
-        
+
         # We need to parse the class definition first if needed
         if not self.snippet:
             self._class_def()
@@ -111,6 +155,7 @@ class SmaliReader:
 
         :return: the active visitor.
         :rtype: ClassVisitor
+        :meta public:
         """
         return self.stack[-1]
 
@@ -124,6 +169,7 @@ class SmaliReader:
         :param visitor: the visitor to notify
         :type visitor: ClassVisitor
         :raises EOFError: if the end of file has beeen reached
+        :meta public:
         """
         raw_line = None
         while True:
@@ -145,10 +191,16 @@ class SmaliReader:
             if raw_line.strip().startswith('#'):
                 if self._visitor and self.comments:
                     self._visitor.visit_comment(self.line.eol_comment)
+                elif not self._visitor and self.comments:
+                    self._copy_line()
                 continue
 
             # return nothing as the line object is defined globally
             break
+
+    def _copy_line(self) -> None:
+        if self.copy_handler:
+            self.copy_handler.copy(self.line.raw, self._visitor.__class__)
 
     def _validate_token(self, token: str, expected: Token) -> None:
         """Validates the given token if validation is enabled.
@@ -157,8 +209,8 @@ class SmaliReader:
         :type token: str
         :param expected: the expected token value
         :type expected: str
-        :raises SyntaxError: _description_
-        :raises SyntaxError: _description_
+        :raises SyntaxError: if validation failed
+        :meta public:
         """
         if not self.validate:
             return
@@ -175,6 +227,7 @@ class SmaliReader:
         :param name: the type descriptor, e.g. 'Lcom/example/ABC;'
         :type name: str
         :raises SyntaxError: if the provided string is not a valid descriptor
+        :meta public:
         """
         if not self.validate:
             return
@@ -196,6 +249,7 @@ class SmaliReader:
 
         :return: the list of access flags
         :rtype: list
+        :meta public:
         """
         flags = []
         while True:
@@ -226,6 +280,7 @@ class SmaliReader:
         :type strip_chars: str, optional
         :return: the collected values
         :rtype: list
+        :meta public:
         """
         i_values = []
         while self.line.has_next():
@@ -237,12 +292,13 @@ class SmaliReader:
         return i_values
 
     def _do_visit(self) -> None:
-        """Performs the source code visitation.
+        """Performs the source code visit.
 
         :param source: the source to read from
         :type source: io.IOBase
         :param visitor: the visitor to notify
         :type visitor: ClassVisitor
+        :meta public:
         """
         try:
             # Maybe use a loop that only executed one method at time
@@ -250,6 +306,9 @@ class SmaliReader:
             while True:
                 self._next_line()
                 if len(self.line) == 0:
+                    # These are just blank lines used in the original
+                    # source file.
+                    self._copy_line()
                     continue
 
                 statement = self.line.peek()
@@ -294,6 +353,8 @@ class SmaliReader:
                 self._validate_descriptor(name)
                 self._visitor.visit_implements(name)
                 self._publish_comment()
+            else:
+                self._copy_line()
 
         elif statement == Token.CLASS:
             c_visitor = self._class_def(next_line=False, inner_class=True)
@@ -318,6 +379,7 @@ class SmaliReader:
         :raises SyntaxError: if EOL is reached
         :return: an inner class ClassVisitor instance if inner_class it True
         :rtype: ClassVisitor | None
+        :meta public:
         """
         if next_line:
             # Only parse the next line if we have to
@@ -368,8 +430,11 @@ class SmaliReader:
             if not SmaliType.is_type_descriptor(super_class):
                 raise SyntaxError(f"Expected super-class type descriptor - got '{super_class}'")
 
-            # Visit the class afterwards
-            self._visitor.visit_super(super_class)
+            if self._visitor:
+                # Visit the class afterwards
+                self._visitor.visit_super(super_class)
+            else:
+                self._copy_line()
             self._publish_comment()
         except StopIteration as err:
             self._throw_eol(err)
@@ -379,13 +444,17 @@ class SmaliReader:
 
         :param visitor: the visitor to notify
         :type visitor: ClassVisitor
+        :meta public:
         """
         try:
             token = next(self.line)
             self._validate_token(token, Token.SOURCE)
 
             source = self.line.peek().replace('"', '')
-            self._visitor.visit_source(source)
+            if self._visitor:
+                self._visitor.visit_source(source)
+            else:
+                self._copy_line()
             self._publish_comment()
         except StopIteration as err:
             self._throw_eol(err)
@@ -410,24 +479,36 @@ class SmaliReader:
             # If we have a direct assignment, we should parse the value
             value = None
             if self.line.has_next():
-                # The value will be assigned automatically
-                while self.line.has_next():
-                    value = next(self.line)
+                value = self.line.last()
 
-            f_visitor = self._visitor.visit_field(name, access_flags, descriptor, value)
-            self._publish_comment()
+            if self._visitor:
+                f_visitor = self._visitor.visit_field(name, access_flags, descriptor, value)
+                self._publish_comment()
+            else:
+                f_visitor = EMPTY_FIELDV
+
             self.stack.append(f_visitor if f_visitor else EMPTY_FIELDV)
+            if not f_visitor or f_visitor == EMPTY_FIELDV:
+                self._copy_line()
 
         except StopIteration as err:
             self._throw_eol(err)
 
     def _handle_end(self) -> None:
-        """Removes the active visitor from the stack."""
+        """Removes the active visitor from the stack.
+
+        :meta public:
+        """
+        directive = self.line.last()
+        if directive in (Token.LOCAL, Token.PARAM):
+            self._copy_line()
+            return
+        
         visitor = self.stack.pop()
-        if visitor and (visitor != EMPTY_ANNOV
-            and visitor != EMPTY_FIELDV
-            and visitor != EMPTY_METHV):
+        if visitor and visitor not in (EMPTY_ANNOV, EMPTY_FIELDV, EMPTY_METHV):
             visitor.visit_end()
+        else:
+            self._copy_line()
 
     def _handle_method(self) -> None:
         try:
@@ -440,14 +521,19 @@ class SmaliReader:
             # We don't need to verify the signature as this is done
             # in the Type class
             signature = Type(self.line.peek())
+            m_visitor = EMPTY_METHV
+            if self._visitor:
+                m_visitor = self._visitor.visit_method(
+                    signature.get_method_name(), access_flags,
+                    signature.get_method_params(), signature.get_method_return_type()
+                )
 
-            m_visitor = self._visitor.visit_method(
-                signature.get_method_name(), access_flags,
-                signature.get_method_params(), signature.get_method_return_type()
-            )
             # Add the visitor first before publishing the comment
             self.stack.append(m_visitor if m_visitor else EMPTY_METHV)
             self._publish_comment()
+            # The line will be copied if no visitor has been set
+            if not m_visitor or m_visitor == EMPTY_METHV:
+                self._copy_line()
         except StopIteration as err:
             self._throw_eol(err)
 
@@ -456,11 +542,11 @@ class SmaliReader:
 
         Note that the annotation will only be visited if the annotation visitor
         is not null.
+        :meta public:
         """
         try:
             token = next(self.line)
             self._validate_token(token, Token.ANNOTATION)
-
 
             flags = self._read_access_flags()
             access_flags = AccessType.get_flags(flags)
@@ -470,9 +556,14 @@ class SmaliReader:
             descriptor = self.line.peek()
             self._validate_descriptor(descriptor)
 
-            a_visitor = self._visitor.visit_annotation(access_flags, descriptor)
+            a_visitor = EMPTY_ANNOV
+            if self._visitor:
+                a_visitor = self._visitor.visit_annotation(access_flags, descriptor)
+
             self.stack.append(a_visitor if a_visitor else EMPTY_ANNOV)
             self._publish_comment()
+            if not a_visitor or a_visitor == EMPTY_ANNOV:
+                self._copy_line()
         except StopIteration as err:
             self._throw_eol(err)
 
@@ -494,6 +585,8 @@ class SmaliReader:
 
             self.stack.append(a_visitor)
             self._publish_comment()
+            if not a_visitor or a_visitor == EMPTY_ANNOV:
+                self._copy_line()
         except StopIteration as err:
             self._throw_eol(err)
 
@@ -517,9 +610,24 @@ class SmaliReader:
             val_name = val_name.rstrip('>').lstrip('<')
             if self._visitor and self._visitor != EMPTY_ANNOV:
                 self._visitor.visit_enum(name, descriptor, val_name, val_descriptor)
+            else:
+                self._copy_line()
 
         except StopIteration as err:
             self._throw_eol(err)
+
+    def _handle_debug(self) -> None:
+        # If validation is enabled, the '.super' token is verified
+        token = next(self.line)
+        self._validate_token(token, Token.DEBUG)
+
+        enbaled = self.line.peek()
+        if self._visitor:
+            # Visit the class afterwards
+            self._visitor.visit_super(int(enbaled))
+        else:
+            self._copy_line()
+        self._publish_comment()
 
 ###########################################################################################
 # ANNOTATION VALUE IMPLEMENTATION
@@ -537,7 +645,11 @@ class SmaliReader:
 
         # We either have a normal value or an array of values
         else:
+            do_copy = not self._visitor or self._visitor == EMPTY_ANNOV
             cleaned = self.line.cleaned
+            if do_copy:
+                self._copy_line()
+
             if '{' in cleaned:
                 if '}' in cleaned:
                     a_values = [
@@ -555,6 +667,8 @@ class SmaliReader:
                         # Don't forget to publish a line comment
                         self._publish_comment()
                         a_values.append(value)
+                        if do_copy:
+                            self._copy_line()
                         self._next_line()
 
                 # publish collected values
@@ -571,6 +685,7 @@ class SmaliReader:
 
     def _handle_param(self) -> None:
         if not self._visitor or self._visitor == EMPTY_METHV:
+            self._copy_line()
             return
 
         # Skip '.param' instruction
@@ -589,31 +704,36 @@ class SmaliReader:
         if func:
             func(int(number))
             self._publish_comment()
+        else:
+            self._copy_line()
 
     def _handle_line(self) -> None:
         self._handle_method_int(Token.LINE,
-            self._visitor.visit_line if self._visitor else None
+            self._visitor.visit_line if self._visitor not in (None, EMPTY_METHV) else None
         )
 
     def _handle_registers(self) -> None:
         self._handle_method_int(Token.REGISTERS,
-            self._visitor.visit_registers if self._visitor else None
+            self._visitor.visit_registers if self._visitor  not in (None, EMPTY_METHV) else None
         )
 
     def _handle_locals(self) -> None:
         self._handle_method_int(Token.LOCALS,
-            self._visitor.visit_locals if self._visitor else None
+            self._visitor.visit_locals if self._visitor  not in (None, EMPTY_METHV) else None
         )
 
     def _handle_block(self) -> None:
         block_id = self.line.peek().lstrip(':')
-        if self._visitor:
+        if self._visitor and self._visitor not in (None, EMPTY_METHV):
             self._visitor.visit_block(block_id)
             self._publish_comment()
+        else:
+            self._copy_line()
 
     def _handle_catch(self, is_catchall=False) -> None:
         """Handles simple .catch statements."""
         if not self._visitor or self._visitor == EMPTY_METHV:
+            self._copy_line()
             return
 
         next(self.line)
@@ -643,8 +763,10 @@ class SmaliReader:
             - Instructions starting with 'invoke',
             - Instructions starting with 'return' and
             - GOTO-Instructions
+        :meta public:
         """
         if not self._visitor or self._visitor == EMPTY_METHV:
+            self._copy_line()
             return
 
         instruction = next(self.line)
@@ -682,9 +804,12 @@ class SmaliReader:
         self._publish_comment()
 
     def _handle_packed_switch(self) -> None:
+        do_copy = not self._visitor or self._visitor == EMPTY_METHV
         next(self.line)
 
         value = self.line.peek()
+        if do_copy:
+            self._copy_line()
         self._publish_comment()
         self._next_line()
 
@@ -692,6 +817,8 @@ class SmaliReader:
         while True:
             next_value = next(self.line)
             self._publish_comment()
+            if do_copy:
+                self._copy_line()
             if next_value[0] == ':':
                 blocks.append(next_value.lstrip(':'))
             elif Token.END.value in next_value:
@@ -707,6 +834,7 @@ class SmaliReader:
         self._handle_catch(is_catchall=True)
 
     def _handle_array_data(self) -> None:
+        do_copy = not self._visitor or self._visitor == EMPTY_METHV
         # We can't skip parsing because this operation takes more one
         # one line in the SourceCode
         next(self.line)
@@ -716,11 +844,15 @@ class SmaliReader:
         length = self.line.peek()
         values = []
 
+        if do_copy:
+            self._copy_line()
         self._publish_comment()
         self._next_line()
         while True:
             value = self.line.peek()
             self._publish_comment()
+            if do_copy:
+                self._copy_line()
             if value[0] == '.' and value[1:] == Token.END.value:
                 break
             values.append(value)
@@ -731,6 +863,7 @@ class SmaliReader:
     def _handle_local(self) -> None:
         """Handle debug information."""
         if not self._visitor or self._visitor == EMPTY_METHV:
+            self._copy_line()
             return
 
         # Skip the instruction
@@ -751,17 +884,21 @@ class SmaliReader:
 
     def _handle_sparse_switch(self) -> None:
         """Handles a more complicated switch statement."""
+        do_copy = not self._visitor or self._visitor == EMPTY_METHV
         # We can't skip parsing because this operation takes more one
         # one line in the SourceCode
         next(self.line)
 
         values = {}
-
+        if do_copy:
+            self._copy_line()
         self._publish_comment()
         self._next_line()
         while True:
             key = self.line.peek()
             self._publish_comment()
+            if do_copy:
+                self._copy_line()
             if key[0] == '.' and key[1:] == Token.END.value:
                 break
             # Add the block id without leading ':'
@@ -775,9 +912,12 @@ class SmaliReader:
         if self._visitor and self._visitor != EMPTY_METHV:
             self._visitor.visit_prologue()
             self._publish_comment()
+        else:
+            self._copy_line()
 
     def _handle_restart(self) -> None:
         if not self._visitor or self._visitor == EMPTY_METHV:
+            self._copy_line()
             return
 
         register = self.line.last()

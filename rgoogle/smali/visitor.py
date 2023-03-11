@@ -1,3 +1,4 @@
+# This file is part of rgoogle's Smali API
 # Copyright (C) 2023 MatrixEditor
 
 # This program is free software: you can redistribute it and/or modify
@@ -21,7 +22,8 @@ class VisitorBase:
     """
     def __init__(self, delegate: 'VisitorBase' = None) -> None:
         self.delegate = delegate
-        if delegate and not isinstance(delegate, self.__class__):
+        # does not apply to muliple inheritance
+        if delegate and not isinstance(delegate, self.__class__.__base__):
             raise TypeError(
                 f'Invalid Visitor type - expected subclass of {self.__class__}')
 
@@ -53,10 +55,7 @@ class VisitorBase:
 
 
 class AnnotationVisitor(VisitorBase):
-    """Base class for annotation visitors.
-
-
-    """
+    """Base class for annotation visitors."""
 
     def visit_value(self, name: str, value) -> None:
         """Visits a simple annotation value.
@@ -108,19 +107,22 @@ class AnnotationVisitor(VisitorBase):
         if self.delegate:
             self.delegate.visit_enum(name, owner, const, value_type)
 
-EMPTY_ANNOV = AnnotationVisitor()
 
 class MethodVisitor(VisitorBase):
+    """Base class for method visitors."""
+
     def __init__(self, delegate: 'MethodVisitor' = None) -> None:
         super().__init__(delegate)
 
     def visit_catch(self, exc_name: str, blocks: tuple) -> None:
-        """Called on a '.catch' statement.
+        """Called on a ``.catch`` statement.
 
         The blocks contain the two enclosing goto blocks and the returning
         definition:
 
-            - '.catch' <name> { :block_start .. :block_end } :block_return
+        .. code-block:: bnf
+        
+            .catch <name> { <try_start> .. <try_end> } <catch_handler>
 
         :param exc_name: the exception descriptor
         :type exc_name: str
@@ -131,12 +133,14 @@ class MethodVisitor(VisitorBase):
             self.delegate.visit_catch(exc_name, blocks)
 
     def visit_catchall(self, exc_name: str, blocks: tuple) -> None:
-        """Called on a '.catchall' statement.
+        """Called on a ``.catchall`` statement.
 
         The blocks contain the two enclosing goto blocks and the returning
         definition:
-
-            - '.catchall' <name> { :block_start .. :block_end } :block_return
+        
+        .. code-block:: bnf
+            
+            .catchall <name> { <try_start> .. <try_end> } <catch_handler>
 
         :param exc_name: the exception descriptor
         :type exc_name: str
@@ -147,7 +151,7 @@ class MethodVisitor(VisitorBase):
             self.delegate.visit_catch(exc_name, blocks)
 
     def visit_param(self, register: str, name: str) -> None:
-        """Called on a '.param' statement
+        """Called on a ``.param`` statement
 
         :param register: the register
         :type register: str
@@ -169,10 +173,10 @@ class MethodVisitor(VisitorBase):
             return self.delegate.visit_annotation(access_flags, signature)
 
     def visit_locals(self, local_count: int) -> None:
-        """Called on a '.locals' statement.
+        """Called on a ``.locals`` statement.
 
         The execution context of this method should be the same as of
-        'visit_registers'.
+        *visit_registers*.
 
         :param locals: the amount of local variables
         :type locals: int
@@ -211,9 +215,9 @@ class MethodVisitor(VisitorBase):
             self.delegate.visit_block(name)
 
     def visit_invoke(self, inv_type: str, args: list, owner: str, method: str) -> None:
-        """Handles an 'invoke-*' statement.
+        """Handles an 'invoke-' statement.
 
-        This method is called whenever an 'invoke-*' statement hias been
+        This method is called whenever an 'invoke-' statement hias been
         parsed. That includes 'invoke-virtual' as well as 'invoke-direct'.
 
         The provided metho string contains the method signature which can
@@ -232,7 +236,7 @@ class MethodVisitor(VisitorBase):
             self.delegate.visit_invoke(inv_type, args, owner, method)
 
     def visit_return(self, ret_type: str, args: list) -> None:
-        """Handles 'return-*' statements.
+        """Handles 'return-' statements.
 
         :param ret_type: the return type, e.g. "object" or "void", ...
         :type ret_type: str
@@ -301,7 +305,7 @@ class MethodVisitor(VisitorBase):
 
     def visit_sparse_switch(self, branches: dict) -> None:
         """Visits a .sparse-switch statement.
-        
+
         The branches takes the original case value as their key
         and the block_id as their value.
 
@@ -310,27 +314,27 @@ class MethodVisitor(VisitorBase):
         """
         if self.delegate:
             self.delegate.visit_sparse_switch(branches)
-            
+
     def visit_prologue(self) -> None:
         """Visits a .prologue statement.
-        
+
         Note that this call comes without any arguments.
         """
         if self.delegate:
             self.delegate.visit_prologue()
-    
+
     def visit_restart(self, register: str) -> None:
         """Visits a .restart statement.
 
-        :param register: the register 
+        :param register: the register
         :type register: str
         """
         if self.delegate:
             self.delegate.visit_restart(register)
 
-EMPTY_METHV = MethodVisitor()
 
 class FieldVisitor(VisitorBase):
+    """Base class for field visitors."""
 
     def visit_annotation(self, access_flags: int, signature: str) -> AnnotationVisitor:
         """Prepares to visit an annotation.
@@ -343,9 +347,10 @@ class FieldVisitor(VisitorBase):
         if self.delegate:
             return self.delegate.visit_annotation(access_flags, signature)
 
-EMPTY_FIELDV = FieldVisitor()
 
 class ClassVisitor(VisitorBase):
+    """Base class for Smali class visitors."""
+
     def visit_class(self, name: str, access_flags: int) -> None:
         """Called when the class definition has been parsed.
 
@@ -375,7 +380,7 @@ class ClassVisitor(VisitorBase):
         if self.delegate:
             self.delegate.visit_implements(interface)
 
-    def visit_field(self, name: str, access_flags: int, field_type: str, value) -> FieldVisitor:
+    def visit_field(self, name: str, access_flags: int, field_type: str, value=None) -> FieldVisitor:
         """Called when a global field definition has been parsed.
 
         :param name: the field's name
@@ -438,3 +443,12 @@ class ClassVisitor(VisitorBase):
         """
         if self.delegate:
             self.delegate.visit_source(source)
+
+    def visit_debug(self, enabled: int) -> None:
+        """Visits a ``.debug`` directive.
+
+        :param enabled: whether debugging symbols are enabled.
+        :type enabled: int
+        """
+        if self.delegate:
+            self.delegate.visit_debug(enabled)

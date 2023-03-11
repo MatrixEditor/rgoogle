@@ -8,7 +8,7 @@
 
 The main functionalities of this repository cover creating and parsing Smali files with Python3 as well as decrypt Google's hidden JAR file in the offical `play-services-ads` module.
 
-For more information about the hidden JAR files, visit the [API-Docs]() - there you will find detailed explaination about the topic.
+For more information about the hidden JAR files, visit the [API-Docs]() - there you will find detailed explanation about the topic.
 
 ## Installation
 
@@ -20,7 +20,7 @@ $ cd ./rgoogle && pip install .
 
 ## Usage
 
-For a more detailed explaination of the Smali Visitor-API use the [docs]() or the [Overview](#overview) provided below.
+For a more detailed explanation of the Smali Visitor-API use the [docs]() or the [Overview](#overview) provided below.
 
 ### Parsing Smali-Files
 
@@ -102,7 +102,7 @@ This is just a rough overview of what can be done with the visitor API, so make 
 
 The Smali Visitor-API for generating and transforming Smali-Source files (not bytecode data) is based on the `ClassVisitor` class, similar to the [ASM API](https://asm.ow2.io/asm4-guide.pdf) in Java. Each method in this class is called whenever the corresponding code structure has been parsed. There are two ways how to visit a code structure:
 
-    1. Simple visit: all necessary information is given within the method parameters
+    1. Simple visit: all necessary information are given within the method parameters
     2. Extendend visit: to deep further into the source code, another visitor instance is needed (for fields, methods, sub-annotations or annotations and even inner classes)
 
 The same rules are applied to all other visitor classes. The base class of all visitors must be `VisitorBase` as it contains common methods all sub classes need:

@@ -7,6 +7,7 @@
 # BlueJ files
 *.ctxt
 classes-smali/
+rgoogle/smali/bridge
 
 # Mobile Tools for Java (J2ME)
 .mtj.tmp/

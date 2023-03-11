@@ -1,3 +1,4 @@
+# This file is part of rgoogle's Smali API
 # Copyright (C) 2023 MatrixEditor
 
 # This program is free software: you can redistribute it and/or modify
@@ -12,6 +13,10 @@
 
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+__doc__ = """
+Basic component classes when working with the Smali language.
+"""
+
 import re
 
 from enum import Enum, IntFlag
@@ -22,6 +27,18 @@ __all__ = [
 ]
 
 class AccessType(IntFlag):
+    """Contains all access modifiers for classes, fields, methods and annotations.
+
+    There is also a possibility to use values of this class with an ``in``
+    statement:
+
+    >>> flags = AccessType.PUBLIC + AccessType.FINAL
+    >>> flags in AccessType.PUBLIC
+    True
+    >>> flags in AccessType.PRIVATE
+    False
+    """
+
     PUBLIC = 0x1
     PRIVATE = 0x2
     PROTECTED = 0x4
@@ -43,11 +60,23 @@ class AccessType(IntFlag):
     DECLARED_SYNCHRONIZED = 0x40000
     SYSTEM = 0x80000
     RUNTIME = 0x100000
+    BUILD = 0x200000
 
     @staticmethod
     def get_flags(values: list) -> int:
+        """Converts the given readable access modifiers into an integer.
+
+        :param values: the keyword list
+        :type values: list
+        :return: an integer storing all modifiers
+        :rtype: int
+        """
         result = 0
         for element in values:
+            if not element:
+                continue
+
+            element = str(element).lower()
             for val in AccessType:
                 if val.name.lower().replace('_', '-') == element:
                     result |= val.value
@@ -55,6 +84,13 @@ class AccessType(IntFlag):
 
     @staticmethod
     def get_names(flags: int) -> list:
+        """Converts the given access modifiers to a human readable representation.
+
+        :param flags: the access modifiers
+        :type flags: int
+        :return: a list of keywords
+        :rtype: list
+        """
         result = []
         for val in AccessType:
             if flags in val:
@@ -63,6 +99,13 @@ class AccessType(IntFlag):
 
     @staticmethod
     def find(value: str) -> bool:
+        """Returns whether the given keyword is a valid modifier.
+
+        :param value: the value to check
+        :type value: str
+        :return: True, if the given value represents an access modifier
+        :rtype: bool
+        """
         for val in AccessType:
             name = val.name.lower().replace('_', '-')
             if name == value:
@@ -77,6 +120,21 @@ class AccessType(IntFlag):
         raise TypeError(f"Unsupported type: {type(other)}")
 
 class Token(Enum):
+    """Defines all common token in a Smali file.
+
+    There are some special methods implemented to use constants of this
+    class in the following situations:
+
+    >>> "annotation" == Token.ANNOTATION
+    True
+    >>> "local" != Token.LOCALS
+    True
+    >>> len(Token.ENUM)
+    4
+    >>> str(Token.ARRAYDATA)
+    'array-data'
+    """
+
     ANNOTATION = 'annotation'
     ARRAYDATA = 'array-data'
     CATCH = 'catch'
@@ -99,6 +157,7 @@ class Token(Enum):
     SPARSESWITCH = 'sparse-switch'
     SUBANNOTATION = 'subannotation'
     SUPER = 'super'
+    DEBUG = 'debug'
 
     def __eq__(self, other: str) -> bool:
         if isinstance(other, self.__class__):
@@ -120,7 +179,7 @@ class Line:
     """Simple peekable Iterator implementation."""
 
     RE_EOL_COMMENT = re.compile(r"\s*#.*")
-    """PAttern for EOL (end of line) comments"""
+    """Pattern for EOL (end of line) comments"""
 
     _default = object()
     """The default object which is returned to indicate the
@@ -236,21 +295,31 @@ class Type:
 
     CLINIT = '<clinit>'
     """Static block initializer"""
-    
+
     INIT = '<init>'
     """Constructor method"""
 
     def __init__(self, signature: str) -> None:
         self.__signature = signature
+        if isinstance(signature, type):
+            self.__signature = f"{signature.__module__}.{signature.__name__}"
 
     @property
-    def internal_name(self) -> str:
-        """Returns the internal name of this type.
+    def descriptor(self) -> str:
+        """Returns the type descriptor of this type.
 
-        :return: the internal name used in the DVM (e.g. "Lcom/example/ABC;")
+        :return: the type descriptor used in the DVM (e.g. "Lcom/example/ABC;")
         :rtype: str
         """
-        return self.__signature
+        name = self.__signature
+        if SmaliType.RE_TYPE_VALUE.match(name):
+            return name
+
+        if name.startswith('['):
+            idx = name.rfind('[')
+            return name[ :idx] + f"L{name[idx+1:].replace('.', '/')};"
+
+        return f"L{name.replace('.', '/')};"
 
     @property
     def type_name(self) -> str:
@@ -259,9 +328,9 @@ class Type:
         :return: the type name
         :rtype: str
         """
-        if ';' not in self.__signature and 'L' not in self.__signature:
+        if not SmaliType.RE_TYPE_VALUE.match(self.__signature):
             return self.__signature
-        return self.__signature[1:-1]
+        return self.__signature.lstrip('[')[1:-1].replace('.', '/')
 
     @property
     def class_name(self) -> str:
@@ -270,7 +339,7 @@ class Type:
         :return: the class name (e.g. "com.example.ABC")
         :rtype: str
         """
-        return self.type_name.replace('/', '.')
+        return self.type_name.replace('/', '.').replace('[', '')
 
     def get_method_name(self) -> str:
         """Returns the method name
@@ -332,12 +401,26 @@ class Type:
         return param_list
 
     def get_method_return_type(self) -> str:
+        """Retrieves the method's return type
+
+        :raises TypeError: if there is no valid return type
+        :return: the return type's descriptor
+        :rtype: str
+        """
         end = self.__signature.find(')')
         if end == -1:
             raise TypeError('Invalid method signature')
         return self.__signature[end+1:]
 
 def smali_value(value: str) -> 'SmaliType':
+    """Parses the given string and returns its Smali value representation.
+
+    :param value: the value as a string
+    :type value: str
+    :raises ValueError: if it has no valid Smali type
+    :return: the Smali value representation
+    :rtype: SmaliType
+    """
     sm_value = SmaliType()
     sm_value.value = value
     sm_value.actual_value = None
@@ -388,18 +471,38 @@ class SmaliType:
     11
     """
 
-    RE_INT_VALUE = re.compile(r"[\-\+]?(0x)?\d+")
-    RE_BYTE_VALUE = re.compile(r"[\-\+]?(0x)?\d+t$")
-    RE_SHORT_VALUE = re.compile(r"[\-\+]?(0x)?\d+s$")
-    RE_FLOAT_VALUE = re.compile(r"[\-\+]?(0x)?\d+\.\d+f$")
-    RE_DOUBLE_VALUE = re.compile(r"[\-\+]?(0x)?\d+\.\d+")
-    RE_LONG_VALUE = re.compile(r"[\-\+]?(0x)?\d+l$")
-    RE_CHAR_VALUE = re.compile(r"^'\w*'$")
-    RE_STRING_VALUE = re.compile(r'^"\w*"$')
-    RE_TYPE_VALUE = re.compile(r"\[*((L\S*;$)|([ZCBSIFJD])$)") # NOQA
-    RE_BOOL_VALUE = re.compile(r"true|false")
+    RE_INT_VALUE = re.compile(r"[\-\+]?(0x)?[\dabcdefABCDEF]+")
+    """Pattern for ``int`` values."""
 
-    RE_HEX_VALUE = re.compile(r"0x\d+")
+    RE_BYTE_VALUE = re.compile(r"[\-\+]?(0x)?[\dabcdefABCDEF]+t$")
+    """Pattern for ``byte`` values."""
+
+    RE_SHORT_VALUE = re.compile(r"[\-\+]?(0x)?[\dabcdefABCDEF]+s$")
+    """Pattern for ``short`` values."""
+
+    RE_FLOAT_VALUE = re.compile(r"[\-\+]?(0x)?\d+\.\d+f$")
+    """Pattern for ``float`` values."""
+
+    RE_DOUBLE_VALUE = re.compile(r"[\-\+]?(0x)?\d+\.\d+")
+    """Pattern for ``double`` values."""
+
+    RE_LONG_VALUE = re.compile(r"[\-\+]?(0x)?[\dabcdefABCDEF]+l$")
+    """Pattern for ``long`` values."""
+
+    RE_CHAR_VALUE = re.compile(r"^'\w*'$")
+    """Pattern for ``char`` values."""
+
+    RE_STRING_VALUE = re.compile(r'^"\w*"$')
+    """Pattern for ``String`` values."""
+
+    RE_TYPE_VALUE = re.compile(r"\[*((L\S*;$)|([ZCBSIFVJD])$)") # NOQA
+    """Pattern for type descriptors."""
+
+    RE_BOOL_VALUE = re.compile(r"true|false")
+    """Pattern for ``boolean`` values."""
+
+    RE_HEX_VALUE = re.compile(r"0x[\dabcdefABCDEF]+")
+    """Pattern for integer values."""
 
     TYPE_MAP: list = [
         (RE_SHORT_VALUE, int),
@@ -413,16 +516,31 @@ class SmaliType:
         (RE_STRING_VALUE, lambda x: str(x[1:-1])),
         (RE_TYPE_VALUE, Type)
     ]
+    """Defines custom handlers for actual value defintions
+
+    :meta private:
+    """
 
     value: str
     """The initial source code value (string)"""
 
     actual_value = None
     """The actual value of any type"""
-    
+
     @staticmethod
     def is_type_descriptor(value: str) -> bool:
+        """Returns whether the given value is a valid type descriptor.
+
+        :param value: the value to check
+        :type value: str
+        :return: True, if the value is a valid type descriptor
+        :rtype: bool
+        """
         return SmaliType.RE_TYPE_VALUE.match(value) is not None
+
+####################################################################################
+# INTERNAL
+####################################################################################
 
 __smali_builtins__ = [
     "__contains__", "__eq__", "__ne__", "__len__", "__str__",
@@ -458,9 +576,14 @@ for method in __smali_builtins__:
         lambda self, *args, method=method: self.__dict__[method](*args)
     )
 
+def __wrap_special__(instance, actual_val, val, funct):
+    funct(actual_val, val)
+    return instance
+
 for method, func in __smali_specials__:
     setattr(SmaliType, method,
-        lambda self, val, func=func: func(self.actual_value, val))
+        lambda self, val, func=func: __wrap_special__(self, self.actual_value, val, func)
+    )
 
 del method
 del func

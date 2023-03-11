@@ -12,6 +12,13 @@
 
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+__doc__ = """
+This small python module can be used to decrypt ESA files placed by
+Google into their ``play-services-ads`` library. Unfortunately, you 
+have to extract the ESA file on your own, as it is code published by
+Google.
+"""
+
 
 from rgoogle.esa.cipher import *
 from rgoogle.esa import keys
@@ -29,14 +36,14 @@ def get_key(version: str) -> tuple:
     parts = version.split('.')
     if len(parts) < 2:
         raise ValueError('Version must contain at least 2 numbers')
-    
+
     for name, value in keys.__dict__.items():
         if not name.startswith('v'):
             continue
-        
+
         name_parts = name[1:].split('_')
         if name_parts[0] == parts[0] and name_parts[1] == parts[1]:
             return value
-    
+
     raise ValueError(f"Key for version '{version}' not found!")
 

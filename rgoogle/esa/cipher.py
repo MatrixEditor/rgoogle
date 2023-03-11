@@ -74,6 +74,7 @@ class DefaultCipher:
 
     The following workflow illustrates how this cipher engine decrypts an input
     JAR-file with a SecretKey:
+    
     >>>         +-----------------------+
     >>>         | encrypted JAR: byte[] |
     >>>         +----------+------------+
@@ -148,7 +149,7 @@ class DefaultCipher:
         ivector = decoded[:16]
         content_buffer = decoded[16:]
 
-        cipher = Cipher(self.key, modes.CBC(ivector))
+        cipher = Cipher(self.key, modes.CBC(ivector)) # NOQA
         decryptor = cipher.decryptor()
 
         return decryptor.update(content_buffer) + decryptor.finalize()

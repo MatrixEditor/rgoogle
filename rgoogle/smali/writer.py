@@ -1,3 +1,4 @@
+# This file is part of rgoogle's Smali API
 # Copyright (C) 2023 MatrixEditor
 
 # This program is free software: you can redistribute it and/or modify
@@ -12,6 +13,10 @@
 
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+__doc__ = """
+Contains standard implementations for Smali writers that are able
+to procude classes, method, fields and annotations.
+"""
 
 from rgoogle.smali.visitor import (
     ClassVisitor,
@@ -23,6 +28,7 @@ from rgoogle.smali.base import (
     AccessType,
     Token
 )
+from rgoogle.smali.reader import SupportsCopy, SmaliReader
 from rgoogle.smali import opcode
 
 __all__ = [
@@ -30,7 +36,7 @@ __all__ = [
 ]
 
 
-class _ContainsCodeCache:
+class _ContainsCodeCache(SupportsCopy):
     """Interface to make sure the code cache is returned via a method."""
 
     def get_cache(self) -> '_CodeCache':
@@ -40,6 +46,20 @@ class _ContainsCodeCache:
         :rtype: _CodeCache
         """
 
+    def copy(self, line: str, context: type = ClassVisitor) -> None:
+        if isinstance(self, context):
+            self.get_cache().add(line)
+
+        else:
+            last_writer = self.get_cache().peek()
+            if not last_writer:
+                self.get_cache().add(line)
+
+            elif isinstance(last_writer, SupportsCopy):
+                last_writer.copy(line, context)
+
+            elif isinstance(last_writer, context):
+                last_writer.get_cache().add(line)
 
 class _CodeCache:
     """Simple container class for a code cache.
@@ -145,6 +165,14 @@ class _CodeCache:
         self.__comment_cache.clear()
         self.__code.clear()
 
+    def peek(self) -> _ContainsCodeCache:
+        """Returns the last element of this cache
+
+        :return: the last element that contains itself a ``_CodeCache``
+        :rtype: _ContainsCodeCache
+        """
+        if len(self.__cache) > 0:
+            return self.__cache[-1]
 
 ##########################################################################################
 # ANNOTATION IMPLEMENTATION
@@ -244,7 +272,6 @@ class _SmaliFieldWriter(FieldVisitor, _ContainsCodeCache):
         super().visit_end()
         self.cache.apply_code_cache(True)
         self.cache.add(f".{Token.END} {Token.FIELD}")
-
 
 ##########################################################################################
 # METHOD IMPLEMENTATION
@@ -401,9 +428,11 @@ class _SmaliClassWriter(ClassVisitor, _ContainsCodeCache):
     cache: _CodeCache
     """The code cache to use."""
 
-    def __init__(self, delegate: 'ClassVisitor' = None, indent=0) -> None:
-        super().__init__(delegate)
+    def __init__(self, reader: SmaliReader = None, indent=0) -> None:
+        super().__init__()
         self.cache = _CodeCache(indent)
+        if reader:
+            reader.copy_handler = self
 
     @property
     def code(self) -> str:
@@ -499,10 +528,31 @@ class _SmaliClassWriter(ClassVisitor, _ContainsCodeCache):
         super().visit_eol_comment(text)
         self.cache.add_comment(text)
 
+    def visit_debug(self, enabled: int) -> None:
+        super().visit_debug(enabled)
+        self.cache.add(f".{Token.DEBUG} {enabled}")
+
     def visit_end(self) -> None:
         self.cache.apply_code_cache(True)
         super().visit_end()
 
+    def copy(self, line: str, context: type = ClassVisitor) -> None:
+        if context == ClassVisitor:
+            self.cache.add(line)
+
+        else:
+            last_writer = self.cache.peek()
+            if not last_writer:
+                self.cache.add(line)
+
+            elif isinstance(last_writer, SupportsCopy):
+                last_writer.copy(line, context)
+
+            elif isinstance(last_writer, (context, _ContainsCodeCache)):
+                last_writer.get_cache().add(line)
+
+            else:
+                print('Line excluded:', line, '<context> =', context)
 
 ##########################################################################################
 # EXPORTS

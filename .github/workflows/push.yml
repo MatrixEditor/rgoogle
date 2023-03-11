@@ -1,0 +1,12 @@
+name: "Push Docs validation"
+
+on: [push]
+
+jobs:
+  docs:
+    runs-on: ubunut-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ammaraskar/sphinx-action@master
+        with:
+          docs-folder: "docs/"

@@ -1,3 +1,4 @@
+# This file is part of rgoogle's Smali API
 # Copyright (C) 2023 MatrixEditor
 
 # This program is free software: you can redistribute it and/or modify
@@ -12,6 +13,9 @@
 
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+__doc__ = """
+Implementation of a line-based Smali source code parser using a visitor API.
+"""
 
 from rgoogle.smali.visitor import *
 from rgoogle.smali.base import *
