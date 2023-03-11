@@ -3,7 +3,8 @@
 ![LastEdit](https://img.shields.io:/static/v1?label=LastEdit&message=03/08/2023&color=9cf)
 ![Status](https://img.shields.io:/static/v1?label=Status&message=DRAFT&color=yellow)
 ![Platform](https://img.shields.io:/static/v1?label=Platforms&message=Linux|Windows&color=yellowgreen)
-![PyPi](https://img.shields.io:/static/v1?label=PyPi&message=Not%20yet&color=red)
+[![Documentation Status](https://readthedocs.org/projects/rgoogle/badge/?version=latest)](https://rgoogle.readthedocs.io/en/latest/?badge=latest)
+![PyPi](https://img.shields.io:/static/v1?label=PyPi&message=0.0.1%20yet&color=green)
 
 
 The main functionalities of this repository cover creating and parsing Smali files with Python3 as well as decrypt Google's hidden JAR file in the offical `play-services-ads` module.
