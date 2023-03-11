@@ -1,2 +1,3 @@
-cryptography
+sphinx
 sphinx_rtd_theme
+cryptography
