@@ -8,7 +8,7 @@
 
 The main functionalities of this repository cover creating and parsing Smali files with Python3 as well as decrypt Google's hidden JAR file in the offical `play-services-ads` module.
 
-For more information about the hidden JAR files, visit the [API-Docs](https://matrixeditor.github.io/rgoogle/) - there you will find detailed explanation about the topic.
+For more information about the hidden JAR files, visit the [API-Docs](https://rgoogle.readthedocs.io/) - there you will find detailed explanation about the topic.
 
 ## Installation
 
@@ -20,7 +20,7 @@ $ cd ./rgoogle && pip install .
 
 ## Usage
 
-For a more detailed explanation of the Smali Visitor-API use the [docs](https://matrixeditor.github.io/rgoogle/).
+For a more detailed explanation of the Smali Visitor-API use the [docs](https://rgoogle.readthedocs.io/).
 
 ### Parsing Smali-Files
 
