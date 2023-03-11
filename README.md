@@ -8,7 +8,7 @@
 
 The main functionalities of this repository cover creating and parsing Smali files with Python3 as well as decrypt Google's hidden JAR file in the offical `play-services-ads` module.
 
-For more information about the hidden JAR files, visit the [API-Docs]() - there you will find detailed explanation about the topic.
+For more information about the hidden JAR files, visit the [API-Docs](https://matrixeditor.github.io/rgoogle/) - there you will find detailed explanation about the topic.
 
 ## Installation
 
@@ -20,7 +20,7 @@ $ cd ./rgoogle && pip install .
 
 ## Usage
 
-For a more detailed explanation of the Smali Visitor-API use the [docs]() or the [Overview](#overview) provided below.
+For a more detailed explanation of the Smali Visitor-API use the [docs](https://matrixeditor.github.io/rgoogle/).
 
 ### Parsing Smali-Files
 
@@ -95,48 +95,6 @@ field_writer = writer.visit_field("foo", AccessType.PRIVATE, "Ljava/lang/String"
 writer.visit_end()
 text = writer.code
 ```
-
-This is just a rough overview of what can be done with the visitor API, so make sure you visit the project's [Wiki]().
-
-## Overview
-
-The Smali Visitor-API for generating and transforming Smali-Source files (not bytecode data) is based on the `ClassVisitor` class, similar to the [ASM API](https://asm.ow2.io/asm4-guide.pdf) in Java. Each method in this class is called whenever the corresponding code structure has been parsed. There are two ways how to visit a code structure:
-
-    1. Simple visit: all necessary information are given within the method parameters
-    2. Extendend visit: to deep further into the source code, another visitor instance is needed (for fields, methods, sub-annotations or annotations and even inner classes)
-
-The same rules are applied to all other visitor classes. The base class of all visitors must be `VisitorBase` as it contains common methods all sub classes need:
-
-```python
-class VisitorBase:
-    def visit_comment(self, text: str) -> None: ...
-    def visit_eol_comment(self, text: str) -> None: ...
-    def visit_end(self) -> None: ...
-```
-
-All visitor classes come with a delegate that can be used together with the initial visitor. For instance, we can use our own visitor class together with the provided `SmaliWriter` that automatically writes the source code.
-
-**Note**: The delegate must be an instance of the same class, so `FieldVisitor` objects can't be applied to `MethodVisitor` objects as a delegate.
-
-```python
-from rgoogle.smali import SmaliWriter, ClassVisitor
-
-# must be a subclass of ClassVisitor
-class MyVisitorClass(ClassVisitor): ...
-
-writer = SmaliWriter()
-visitor = MyVisitorClass(delegate=writer)
-```
-
-<kbd>
-<picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/example_dark_doc.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/example_light_doc.png">
-    <img alt="Hellow wotl">
-</picture>
-</kbd>
-
-<!-- LICENSE -->
 ## License
 
 Distributed under the GNU GPLv3. See `LICENSE` for more information.
